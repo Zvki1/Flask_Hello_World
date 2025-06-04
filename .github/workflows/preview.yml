@@ -27,10 +27,12 @@ jobs:
 
     - name: Lancer Ngrok et afficher l’URL
       run: |
-        ngrok http 5000 > ngrok.log &
-        sleep 5
-        echo "URL Temporaire :"
-        curl -s http://localhost:5000/api/tunnels | grep -o 'https://[0-9a-z]*\.ngrok.io'
+        # ngrok http 5000 > ngrok.log &
+        # sleep 5
+        # echo "URL Temporaire :"
+        # curl -s http://localhost:5000/api/tunnels | grep -o 'https://[0-9a-z]*\.ngrok.io'
+        ngrok http 5000 --log=stdout &
+        sleep 10
 
     - name: Maintenir le serveur temporairement (120 sec)
       run: sleep 120
