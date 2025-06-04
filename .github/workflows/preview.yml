@@ -22,17 +22,50 @@ jobs:
     - name: Construire l’image Docker
       run: docker build -t flask-ngrok .
 
-    - name: Lancer le conteneur Flask en arrière-plan
-      run: docker run -d -p 5000:5000 flask-ngrok
-
-    - name: Lancer Ngrok et afficher l’URL
+    - name: Lancer le conteneur Flask
       run: |
-        # ngrok http 5000 > ngrok.log &
-        # sleep 5
-        # echo "URL Temporaire :"
-        # curl -s http://localhost:5000/api/tunnels | grep -o 'https://[0-9a-z]*\.ngrok.io'
-        ngrok http 5000 --log=stdout &
-        sleep 10
+        docker run -d -p 5000:5000 --name flask-app flask-ngrok
+        echo "🕒 Attente que Flask démarre..."
+        for i in {1..10}; do
+          sleep 2
+          if curl -s http://localhost:5000 > /dev/null; then
+            echo "✅ Serveur Flask prêt"
+            break
+          fi
+        done
 
-    - name: Maintenir le serveur temporairement (120 sec)
-      run: sleep 120
+    - name: Lancer Ngrok et récupérer l’URL
+      id: ngrok
+      run: |
+        ngrok http 5000 > /dev/null &
+        echo "🕒 Démarrage de Ngrok..."
+        for i in {1..10}; do
+          sleep 2
+          TUNNEL_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[0-9a-z]*\.ngrok.io' | head -n 1)
+          if [[ ! -z "$TUNNEL_URL" ]]; then
+            echo "✅ Ngrok prêt : $TUNNEL_URL"
+            echo "url=$TUNNEL_URL" >> $GITHUB_OUTPUT
+            break
+          fi
+        done
+        if [[ -z "$TUNNEL_URL" ]]; then
+          echo "❌ Tunnel Ngrok non prêt"
+          exit 1
+        fi
+
+    - name: Installer Pytest et lancer les tests
+      run: |
+        pip install pytest requests
+        export API_URL=${{ steps.ngrok.outputs.url }}
+        pytest tests/
+
+    - name: Afficher l’URL si les tests passent
+      if: success()
+      run: |
+        echo "✅ Tous les tests ont réussi !"
+        echo "🔗 Lien d'accès temporaire : ${{ steps.ngrok.outputs.url }}"
+
+    - name: Échec des tests
+      if: failure()
+      run: |
+        echo "❌ Les tests ont échoué. Aucune URL ne sera affichée."
